@@ -1,0 +1,18 @@
+{
+  "bindings": [
+    {
+      "name": "rentQueueItem",
+      "type": "queueTrigger",
+      "direction": "in",
+      "queueName": "rent-queue",
+      "connection": "AZURE_STORAGE_CONNECTION_STRING"
+    },
+    {
+      "name": "paymentQueueItem",
+      "type": "queue",
+      "direction": "out",
+      "queueName": "payment-queue",
+      "connection": "AZURE_STORAGE_CONNECTION_STRING"
+    }
+  ]
+}

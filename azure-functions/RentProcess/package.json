@@ -1,0 +1,15 @@
+{
+  "name": "rentprocess-function",
+  "version": "1.0.0",
+  "description": "Azure Function to process car rental bookings",
+  "scripts": {
+    "start": "func start",
+    "test": "node test.js"
+  },
+  "dependencies": {
+    "@azure/functions": "^3.5.1",
+    "@azure/storage-queue": "^12.13.0",
+    "@azure/cosmos": "^3.17.3"
+  },
+  "devDependencies": {}
+}
