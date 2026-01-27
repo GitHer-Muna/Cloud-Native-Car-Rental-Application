@@ -1,0 +1,18 @@
+{
+  "name": "cloud-native-car-rental",
+  "version": "1.0.0",
+  "description": "Cloud-native car rental application with CI/CD",
+  "scripts": {
+    "test": "cd bff-service && npm test && cd ../azure-functions/RentProcess && npm test && cd ../PaymentProcess && npm test && cd ../..",
+    "docker-build": "docker-compose build",
+    "docker-up": "docker-compose up",
+    "docker-down": "docker-compose down"
+  },
+  "repository": {
+    "type": "git",
+    "url": "."
+  },
+  "keywords": ["car-rental", "azure", "microservices", "cicd"],
+  "author": "",
+  "license": "MIT"
+}
