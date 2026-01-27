@@ -1,0 +1,275 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+env:
+  AZURE_WEBAPP_NAME_FRONTEND: carrental-frontend
+  AZURE_WEBAPP_NAME_BFF: carrental-bff
+  AZURE_FUNCTIONAPP_NAME: carrental-functions
+  AZURE_RESOURCE_GROUP: rentacar-app-rg
+  AZURE_CONTAINER_REGISTRY: carrentalacr
+  NODE_VERSION: '20.x'
+
+jobs:
+  # Build and test applications
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: Install Azure Functions Core Tools
+      run: |
+        npm install -g azure-functions-core-tools@4 --unsafe-perm true
+
+    - name: Test BFF Service
+      run: |
+        cd bff-service
+        npm install
+        npm test
+
+    - name: Test Azure Functions
+      run: |
+        cd azure-functions/RentProcess
+        npm install
+        npm test
+        cd ../PaymentProcess
+        npm install
+        npm test
+
+    - name: Build Frontend (check syntax)
+      run: |
+        cd frontend
+        # Basic HTML/CSS/JS validation could be added here
+
+  # Build and push Docker images
+  build-and-push-docker:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Login to Azure Container Registry
+      uses: azure/docker-login@v1
+      with:
+        login-server: ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io
+        username: ${{ secrets.AZURE_CREDENTIALS_CLIENT_ID }}
+        password: ${{ secrets.AZURE_CREDENTIALS_CLIENT_SECRET }}
+
+    - name: Build and push BFF Service image
+      run: |
+        cd bff-service
+        docker build -t ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/bff-service:${{ github.sha }} .
+        docker tag ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/bff-service:${{ github.sha }} ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/bff-service:latest
+        docker push ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/bff-service:${{ github.sha }}
+        docker push ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/bff-service:latest
+
+    - name: Build and push Frontend image
+      run: |
+        cd frontend
+        docker build -t ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/frontend:${{ github.sha }} .
+        docker tag ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/frontend:${{ github.sha }} ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/frontend:latest
+        docker push ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/frontend:${{ github.sha }}
+        docker push ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/frontend:latest
+
+  # Deploy Azure Functions
+  deploy-functions:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+
+    - name: Install Azure Functions Core Tools
+      run: |
+        npm install -g azure-functions-core-tools@4 --unsafe-perm true
+
+    - name: Login to Azure
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Deploy RentProcess Function
+      run: |
+        cd azure-functions/RentProcess
+        func azure functionapp publish ${{ env.AZURE_FUNCTIONAPP_NAME }} --build remote
+
+    - name: Deploy PaymentProcess Function
+      run: |
+        cd azure-functions/PaymentProcess
+        func azure functionapp publish ${{ env.AZURE_FUNCTIONAPP_NAME }} --build remote
+
+  # Deploy to Azure App Services
+  deploy-appservices:
+    needs: [build-and-push-docker, deploy-functions]
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Login to Azure
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Deploy BFF Service to App Service
+      uses: azure/webapps-deploy@v2
+      with:
+        app-name: ${{ env.AZURE_WEBAPP_NAME_BFF }}
+        images: ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/bff-service:${{ github.sha }}
+
+    - name: Deploy Frontend to App Service
+      uses: azure/webapps-deploy@v2
+      with:
+        app-name: ${{ env.AZURE_WEBAPP_NAME_FRONTEND }}
+        images: ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/frontend:${{ github.sha }}
+
+    - name: Configure BFF Service Environment Variables
+      run: |
+        az webapp config appsettings set \
+          --name ${{ env.AZURE_WEBAPP_NAME_BFF }} \
+          --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+          --settings AZURE_STORAGE_CONNECTION_STRING="${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}" \
+                     COSMOS_DB_CONNECTION_STRING="${{ secrets.COSMOS_DB_CONNECTION_STRING }}"
+
+  # Health check after deployment
+  health-check:
+    needs: deploy-appservices
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+
+    - name: Run Health Check
+      run: |
+        npm install
+        npm run health-check
+
+  # Create Azure infrastructure
+  create-infrastructure:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Login to Azure
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Create Resource Group
+      run: |
+        az group create --name ${{ env.AZURE_RESOURCE_GROUP }} --location westus2
+
+    - name: Create Storage Account
+      run: |
+        az storage account create \
+          --name carrentaloxre44puwcfng \
+          --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+          --location westus2 \
+          --sku Standard_LRS \
+          --kind StorageV2
+
+    - name: Create Cosmos DB Account
+      run: |
+        az cosmosdb create \
+          --name carrental-cosmos \
+          --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+          --locations regionName=westus2
+
+    - name: Create Cosmos DB Database and Containers
+      run: |
+        az cosmosdb sql database create \
+          --account-name carrental-cosmos \
+          --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+          --name RentACarDB
+
+        az cosmosdb sql container create \
+          --account-name carrental-cosmos \
+          --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+          --database-name RentACarDB \
+          --name Rentals \
+          --partition-key-path "/bookingId"
+
+        az cosmosdb sql container create \
+          --account-name carrental-cosmos \
+          --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+          --database-name RentACarDB \
+          --name Payments \
+          --partition-key-path "/paymentId"
+
+    - name: Create Storage Queues
+      run: |
+        STORAGE_KEY=$(az storage account keys list --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --account-name carrentaloxre44puwcfng --query '[0].value' -o tsv)
+        az storage queue create --name rent-queue --account-name carrentaloxre44puwcfng --account-key $STORAGE_KEY
+        az storage queue create --name payment-queue --account-name carrentaloxre44puwcfng --account-key $STORAGE_KEY
+
+    - name: Create Function App
+      run: |
+        az functionapp create \
+          --name ${{ env.AZURE_FUNCTIONAPP_NAME }} \
+          --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+          --consumption-plan-location westus2 \
+          --runtime node \
+          --runtime-version 18 \
+          --storage-account carrentaloxre44puwcfng \
+          --functions-version 4
+
+    - name: Create Container Registry
+      run: |
+        az acr create \
+          --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+          --name ${{ env.AZURE_CONTAINER_REGISTRY }} \
+          --sku Basic \
+          --admin-enabled true
+
+    - name: Create App Service Plan
+      run: |
+        az appservice plan create \
+          --name carrental-webplan \
+          --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+          --sku S1 \
+          --is-linux
+
+    - name: Create BFF App Service
+      run: |
+        az webapp create \
+          --name ${{ env.AZURE_WEBAPP_NAME_BFF }} \
+          --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+          --plan carrental-webplan \
+          --runtime "NODE|18-lts"
+
+    - name: Create Frontend App Service
+      run: |
+        az webapp create \
+          --name ${{ env.AZURE_WEBAPP_NAME_FRONTEND }} \
+          --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+          --plan carrental-webplan \
+          --runtime "NODE|18-lts"
