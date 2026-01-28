@@ -1,10 +1,13 @@
-name: CI/CD Pipeline
+name: GitOps Pipeline
+
+# 🚀 GitOps: Git as Single Source of Truth
+# Push to 'main' → Production deployment
+# Push to 'staging' → Staging deployment
+# Git branch determines environment automatically
 
 on:
   push:
-    branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
+    branches: [ main, staging ]
   workflow_dispatch:
     inputs:
       action:
