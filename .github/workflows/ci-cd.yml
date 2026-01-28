@@ -25,7 +25,7 @@ env:
   AZURE_FUNCTIONAPP_NAME: carrental-functions
   AZURE_RESOURCE_GROUP: rentacar-app-rg
   AZURE_CONTAINER_REGISTRY: carrentalacr
-  NODE_VERSION: '20.x'
+  NODE_VERSION: '24.x'
 
 jobs:
   # Create Azure infrastructure (only on push to main)
@@ -96,7 +96,7 @@ jobs:
           --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
           --consumption-plan-location westus2 \
           --runtime node \
-          --runtime-version 18 \
+          --runtime-version 24 \
           --storage-account carrentaloxre44puwcfng \
           --functions-version 4
 
@@ -122,7 +122,7 @@ jobs:
           --name ${{ env.AZURE_WEBAPP_NAME_BFF }} \
           --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
           --plan carrental-webplan \
-          --runtime "NODE|18-lts"
+          --runtime "NODE|24-lts"
 
     - name: Create Frontend App Service
       run: |
@@ -130,7 +130,7 @@ jobs:
           --name ${{ env.AZURE_WEBAPP_NAME_FRONTEND }} \
           --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
           --plan carrental-webplan \
-          --runtime "NODE|18-lts"
+          --runtime "NODE|24-lts"
 
   # Destroy Azure infrastructure (manual trigger only)
   destroy-infrastructure:
