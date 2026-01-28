@@ -243,7 +243,7 @@ jobs:
     - name: Deploy Azure Functions
       run: |
         cd azure-functions
-        func azure functionapp publish ${{ env.AZURE_FUNCTIONAPP_NAME }} --build remote
+        func azure functionapp publish ${{ env.AZURE_FUNCTIONAPP_NAME }} --javascript --build remote
 
   # Deploy to Azure App Services
   deploy-appservices:
