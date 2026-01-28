@@ -5,6 +5,16 @@ on:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to perform'
+        required: true
+        default: 'deploy'
+        type: choice
+        options:
+        - deploy
+        - destroy
 
 env:
   AZURE_WEBAPP_NAME_FRONTEND: carrental-frontend
@@ -15,165 +25,9 @@ env:
   NODE_VERSION: '20.x'
 
 jobs:
-  # Build and test applications
-  build-and-test:
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: ${{ env.NODE_VERSION }}
-
-    - name: Install Azure Functions Core Tools
-      run: |
-        npm install -g azure-functions-core-tools@4 --unsafe-perm true
-
-    - name: Test BFF Service
-      run: |
-        cd bff-service
-        npm install
-        npm test
-
-    - name: Test Azure Functions
-      run: |
-        cd azure-functions/RentProcess
-        npm install
-        npm test
-        cd ../PaymentProcess
-        npm install
-        npm test
-
-    - name: Build Frontend (check syntax)
-      run: |
-        cd frontend
-        # Basic HTML/CSS/JS validation could be added here
-
-  # Build and push Docker images
-  build-and-push-docker:
-    needs: build-and-test
-    runs-on: ubuntu-latest
-    environment: production
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Login to Azure
-      uses: azure/login@v1
-      with:
-        creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-    - name: Login to Azure Container Registry
-      run: |
-        az acr login --name ${{ env.AZURE_CONTAINER_REGISTRY }}
-
-    - name: Build and push BFF Service image
-      run: |
-        cd bff-service
-        docker build -t ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/bff-service:${{ github.sha }} .
-        docker tag ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/bff-service:${{ github.sha }} ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/bff-service:latest
-        docker push ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/bff-service:${{ github.sha }}
-        docker push ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/bff-service:latest
-
-    - name: Build and push Frontend image
-      run: |
-        cd frontend
-        docker build -t ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/frontend:${{ github.sha }} .
-        docker tag ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/frontend:${{ github.sha }} ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/frontend:latest
-        docker push ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/frontend:${{ github.sha }}
-        docker push ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/frontend:latest
-
-  # Deploy Azure Functions
-  deploy-functions:
-    needs: build-and-test
-    runs-on: ubuntu-latest
-    environment: production
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: ${{ env.NODE_VERSION }}
-
-    - name: Install Azure Functions Core Tools
-      run: |
-        npm install -g azure-functions-core-tools@4 --unsafe-perm true
-
-    - name: Login to Azure
-      uses: azure/login@v1
-      with:
-        creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-    - name: Deploy RentProcess Function
-      run: |
-        cd azure-functions/RentProcess
-        func azure functionapp publish ${{ env.AZURE_FUNCTIONAPP_NAME }} --build remote
-
-    - name: Deploy PaymentProcess Function
-      run: |
-        cd azure-functions/PaymentProcess
-        func azure functionapp publish ${{ env.AZURE_FUNCTIONAPP_NAME }} --build remote
-
-  # Deploy to Azure App Services
-  deploy-appservices:
-    needs: [build-and-push-docker, deploy-functions]
-    runs-on: ubuntu-latest
-    environment: production
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Login to Azure
-      uses: azure/login@v1
-      with:
-        creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-    - name: Deploy BFF Service to App Service
-      uses: azure/webapps-deploy@v2
-      with:
-        app-name: ${{ env.AZURE_WEBAPP_NAME_BFF }}
-        images: ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/bff-service:${{ github.sha }}
-
-    - name: Deploy Frontend to App Service
-      uses: azure/webapps-deploy@v2
-      with:
-        app-name: ${{ env.AZURE_WEBAPP_NAME_FRONTEND }}
-        images: ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/frontend:${{ github.sha }}
-
-    - name: Configure BFF Service Environment Variables
-      run: |
-        az webapp config appsettings set \
-          --name ${{ env.AZURE_WEBAPP_NAME_BFF }} \
-          --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-          --settings AZURE_STORAGE_CONNECTION_STRING="${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}" \
-                     COSMOS_DB_CONNECTION_STRING="${{ secrets.COSMOS_DB_CONNECTION_STRING }}"
-
-  # Health check after deployment
-  health-check:
-    needs: deploy-appservices
-    runs-on: ubuntu-latest
-    environment: production
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: ${{ env.NODE_VERSION }}
-
-    - name: Run Health Check
-      run: |
-        npm install
-        npm run health-check
-
-  # Create Azure infrastructure
+  # Create Azure infrastructure (only on push to main)
   create-infrastructure:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && github.event.inputs.action != 'destroy'
     runs-on: ubuntu-latest
     environment: production
     steps:
@@ -274,3 +128,178 @@ jobs:
           --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
           --plan carrental-webplan \
           --runtime "NODE|18-lts"
+
+  # Destroy Azure infrastructure (manual trigger only)
+  destroy-infrastructure:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Login to Azure
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Destroy Resource Group
+      run: |
+        az group delete --name ${{ env.AZURE_RESOURCE_GROUP }} --yes --no-wait
+
+  # Build and test applications
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+
+    - name: Install Azure Functions Core Tools
+      run: |
+        npm install -g azure-functions-core-tools@4 --unsafe-perm true
+
+    - name: Test BFF Service
+      run: |
+        cd bff-service
+        npm install
+        npm test
+
+    - name: Test Azure Functions
+      run: |
+        cd azure-functions/RentProcess
+        npm install
+        npm test
+        cd ../PaymentProcess
+        npm install
+        npm test
+
+    - name: Build Frontend (check syntax)
+      run: |
+        cd frontend
+        # Basic HTML/CSS/JS validation could be added here
+
+  # Build and push Docker images
+  build-and-push-docker:
+    needs: [create-infrastructure, build-and-test]
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Login to Azure
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Login to Azure Container Registry
+      run: |
+        az acr login --name ${{ env.AZURE_CONTAINER_REGISTRY }}
+
+    - name: Build and push BFF Service image
+      run: |
+        cd bff-service
+        docker build -t ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/bff-service:${{ github.sha }} .
+        docker tag ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/bff-service:${{ github.sha }} ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/bff-service:latest
+        docker push ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/bff-service:${{ github.sha }}
+        docker push ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/bff-service:latest
+
+    - name: Build and push Frontend image
+      run: |
+        cd frontend
+        docker build -t ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/frontend:${{ github.sha }} .
+        docker tag ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/frontend:${{ github.sha }} ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/frontend:latest
+        docker push ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/frontend:${{ github.sha }}
+        docker push ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/frontend:latest
+
+  # Deploy Azure Functions
+  deploy-functions:
+    needs: [create-infrastructure, build-and-test]
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+
+    - name: Install Azure Functions Core Tools
+      run: |
+        npm install -g azure-functions-core-tools@4 --unsafe-perm true
+
+    - name: Login to Azure
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Deploy RentProcess Function
+      run: |
+        cd azure-functions/RentProcess
+        func azure functionapp publish ${{ env.AZURE_FUNCTIONAPP_NAME }} --build remote
+
+    - name: Deploy PaymentProcess Function
+      run: |
+        cd azure-functions/PaymentProcess
+        func azure functionapp publish ${{ env.AZURE_FUNCTIONAPP_NAME }} --build remote
+
+  # Deploy to Azure App Services
+  deploy-appservices:
+    needs: [build-and-push-docker, deploy-functions]
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Login to Azure
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Deploy BFF Service to App Service
+      uses: azure/webapps-deploy@v2
+      with:
+        app-name: ${{ env.AZURE_WEBAPP_NAME_BFF }}
+        images: ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/bff-service:${{ github.sha }}
+
+    - name: Deploy Frontend to App Service
+      uses: azure/webapps-deploy@v2
+      with:
+        app-name: ${{ env.AZURE_WEBAPP_NAME_FRONTEND }}
+        images: ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/frontend:${{ github.sha }}
+
+    - name: Configure BFF Service Environment Variables
+      run: |
+        az webapp config appsettings set \
+          --name ${{ env.AZURE_WEBAPP_NAME_BFF }} \
+          --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+          --settings AZURE_STORAGE_CONNECTION_STRING="${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}" \
+                     COSMOS_DB_CONNECTION_STRING="${{ secrets.COSMOS_DB_CONNECTION_STRING }}"
+
+  # Health check after deployment
+  health-check:
+    needs: deploy-appservices
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+
+    - name: Run Health Check
+      run: |
+        npm install
+        npm run health-check
+
