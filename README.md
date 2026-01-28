@@ -281,6 +281,4 @@ Free to use for learning and portfolio projects.
 
 ---
 
-**Made for learning DevOps and Azure cloud development.** 
-
 If this helped you, give it a ⭐ on GitHub!
