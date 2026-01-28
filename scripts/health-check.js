@@ -1,7 +1,7 @@
 const { setTimeout: wait } = require('timers/promises');
 const https = require('https');
 
-function getJson(url, timeout = 5000) {
+function getJson(url, timeout = 10000) {
   return new Promise((resolve, reject) => {
     const req = https.get(url, { timeout }, (res) => {
       const { statusCode } = res;
@@ -19,10 +19,10 @@ function getJson(url, timeout = 5000) {
   });
 }
 
-async function checkUrl(url, retries = 5, delayMs = 3000) {
+async function checkUrl(url, retries = 24, delayMs = 5000) {
   for (let i = 1; i <= retries; i++) {
     try {
-      const { statusCode } = await getJson(url);
+      const { statusCode } = await getJson(url, 10000);
       if (statusCode >= 200 && statusCode < 400) return true;
       console.log(`Check ${url} returned status ${statusCode}`);
     } catch (err) {
@@ -46,10 +46,10 @@ async function checkUrl(url, retries = 5, delayMs = 3000) {
   const bffUrl = `https://${bffName}.azurewebsites.net/api/health`;
 
   console.log('Checking frontend:', frontendUrl);
-  const frontendOk = await checkUrl(frontendUrl, 6, 5000);
+  const frontendOk = await checkUrl(frontendUrl, 24, 5000);
 
   console.log('Checking BFF service:', bffUrl);
-  const bffOk = await checkUrl(bffUrl, 6, 5000);
+  const bffOk = await checkUrl(bffUrl, 24, 5000);
 
   if (frontendOk && bffOk) {
     console.log('\u2705 All services healthy');

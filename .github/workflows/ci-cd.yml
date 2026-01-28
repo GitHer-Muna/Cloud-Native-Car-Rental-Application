@@ -296,6 +296,25 @@ jobs:
           --settings AZURE_STORAGE_CONNECTION_STRING="${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}" \
                      COSMOS_DB_CONNECTION_STRING="${{ secrets.COSMOS_DB_CONNECTION_STRING }}"
 
+    - name: Gather App Service Diagnostics
+      run: |
+        echo "--- FRONTEND APP SHOW ---"
+        az webapp show --name ${{ env.AZURE_WEBAPP_NAME_FRONTEND }} --resource-group ${{ env.AZURE_RESOURCE_GROUP }} -o json
+        echo "--- BFF APP SHOW ---"
+        az webapp show --name ${{ env.AZURE_WEBAPP_NAME_BFF }} --resource-group ${{ env.AZURE_RESOURCE_GROUP }} -o json
+        echo "--- FRONTEND CONTAINER CONFIG ---"
+        az webapp config container show --name ${{ env.AZURE_WEBAPP_NAME_FRONTEND }} --resource-group ${{ env.AZURE_RESOURCE_GROUP }} || true
+        echo "--- BFF CONTAINER CONFIG ---"
+        az webapp config container show --name ${{ env.AZURE_WEBAPP_NAME_BFF }} --resource-group ${{ env.AZURE_RESOURCE_GROUP }} || true
+        echo "--- FRONTEND DEPLOYMENT LOG ---"
+        az webapp log deployment show --name ${{ env.AZURE_WEBAPP_NAME_FRONTEND }} --resource-group ${{ env.AZURE_RESOURCE_GROUP }} || true
+        echo "--- BFF DEPLOYMENT LOG ---"
+        az webapp log deployment show --name ${{ env.AZURE_WEBAPP_NAME_BFF }} --resource-group ${{ env.AZURE_RESOURCE_GROUP }} || true
+        echo "--- ACR TAGS (frontend) ---"
+        az acr repository show-tags --name ${{ env.AZURE_CONTAINER_REGISTRY }} --repository frontend -o table || true
+        echo "--- ACR TAGS (bff-service) ---"
+        az acr repository show-tags --name ${{ env.AZURE_CONTAINER_REGISTRY }} --repository bff-service -o table || true
+
   # Health check after deployment
   health-check:
     needs: deploy-appservices
