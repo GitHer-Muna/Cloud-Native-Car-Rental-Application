@@ -67,7 +67,7 @@ Customer fills form → Website → Backend → Queue → Function → Database
 ## What You Need
 
 Before starting, install these on your computer:
-- **Node.js** (version 18 or newer) - [Download here](https://nodejs.org/)
+- **Node.js** (version 24.x) - [Download here](https://nodejs.org/)
 - **Git** - [Download here](https://git-scm.com/)
 - **Docker** - [Download here](https://www.docker.com/)
 - **Azure account** (free) - [Sign up here](https://azure.microsoft.com/free/)
