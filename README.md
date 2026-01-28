@@ -78,7 +78,7 @@ Before starting, install these on your computer:
 
 1. **Clone this project:**
 ```bash
-git clone <your-repo-url>
+git clone < https://github.com/GitHer-Muna/Cloud-Native-Car-Rental-Application.git >
 cd "Cloud-Native Car Rental Application"
 ```
 
@@ -264,15 +264,13 @@ Perfect for:
 ## Next Steps
 
 After you get this working:
-1. Read [BLOG.md](BLOG.md) - my learning journey
-2. Read [GITOPS.md](GITOPS.md) - detailed GitOps guide
-3. Modify the code and experiment
-4. Add new features
-5. Deploy your changes
+1. Read [GITOPS.md](GITOPS.md) - detailed GitOps guide
+2. Modify the code and experiment
+3. Add new features
+4. Deploy your changes
 
 ## Need Help?
 
-- Check [BLOG.md](BLOG.md) for detailed explanations
 - Check [GITOPS.md](GITOPS.md) for deployment help
 - Review GitHub Actions logs
 - Check Azure Portal for errors
