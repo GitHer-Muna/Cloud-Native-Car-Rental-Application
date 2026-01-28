@@ -1,0 +1,8 @@
+{
+  "name": "carrental-root",
+  "version": "1.0.0",
+  "description": "Root utilities for CI (health checks)",
+  "scripts": {
+    "health-check": "node ./scripts/health-check.js"
+  }
+}
