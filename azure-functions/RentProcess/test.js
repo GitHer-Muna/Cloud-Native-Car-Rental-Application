@@ -30,7 +30,7 @@ function testRentalRecordCreation() {
         rentalDays: bookingData.rentalDays,
         totalAmount: bookingData.totalAmount,
         status: 'confirmed',
-        processedAt: expect.any(String),
+        processedAt: new Date().toISOString(),
         bookingDate: bookingData.bookingDate
     };
 
@@ -74,7 +74,7 @@ function testPaymentQueueMessage() {
         email: bookingData.email,
         amount: bookingData.totalAmount,
         status: 'pending',
-        createdAt: expect.any(String)
+        createdAt: new Date().toISOString()
     };
 
     // Simulate payment data creation
