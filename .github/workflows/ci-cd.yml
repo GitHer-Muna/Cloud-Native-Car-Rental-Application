@@ -296,6 +296,24 @@ jobs:
           --settings AZURE_STORAGE_CONNECTION_STRING="${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}" \
                      COSMOS_DB_CONNECTION_STRING="${{ secrets.COSMOS_DB_CONNECTION_STRING }}"
 
+    - name: Ensure correct container ports
+      run: |
+        echo "Setting WEBSITES_PORT for BFF to 3000"
+        az webapp config appsettings set \
+          --name ${{ env.AZURE_WEBAPP_NAME_BFF }} \
+          --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+          --settings WEBSITES_PORT=3000
+
+        echo "Setting WEBSITES_PORT for Frontend to 80"
+        az webapp config appsettings set \
+          --name ${{ env.AZURE_WEBAPP_NAME_FRONTEND }} \
+          --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+          --settings WEBSITES_PORT=80
+
+        echo "Restarting apps to apply new settings"
+        az webapp restart --name ${{ env.AZURE_WEBAPP_NAME_BFF }} --resource-group ${{ env.AZURE_RESOURCE_GROUP }} || true
+        az webapp restart --name ${{ env.AZURE_WEBAPP_NAME_FRONTEND }} --resource-group ${{ env.AZURE_RESOURCE_GROUP }} || true
+
     - name: Gather App Service Diagnostics
       run: |
         echo "--- FRONTEND APP SHOW ---"
