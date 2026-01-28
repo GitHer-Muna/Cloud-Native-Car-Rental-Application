@@ -276,17 +276,30 @@ jobs:
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-    - name: Deploy BFF Service to App Service
-      uses: azure/webapps-deploy@v2
-      with:
-        app-name: ${{ env.AZURE_WEBAPP_NAME_BFF }}
-        images: ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/bff-service:${{ github.sha }}
+    - name: Deploy BFF Service Container
+      run: |
+        az webapp config container set \
+          --name ${{ env.AZURE_WEBAPP_NAME_BFF }} \
+          --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+          --docker-custom-image-name ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/bff-service:${{ github.sha }} \
+          --docker-registry-server-url https://${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io \
+          --docker-registry-server-user ${{ env.AZURE_CONTAINER_REGISTRY }} \
+          --docker-registry-server-password $(az acr credential show --name ${{ env.AZURE_CONTAINER_REGISTRY }} --query passwords[0].value -o tsv)
 
-    - name: Deploy Frontend to App Service
-      uses: azure/webapps-deploy@v2
-      with:
-        app-name: ${{ env.AZURE_WEBAPP_NAME_FRONTEND }}
-        images: ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/frontend:${{ github.sha }}
+    - name: Deploy Frontend Container
+      run: |
+        az webapp config container set \
+          --name ${{ env.AZURE_WEBAPP_NAME_FRONTEND }} \
+          --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+          --docker-custom-image-name ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/frontend:${{ github.sha }} \
+          --docker-registry-server-url https://${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io \
+          --docker-registry-server-user ${{ env.AZURE_CONTAINER_REGISTRY }} \
+          --docker-registry-server-password $(az acr credential show --name ${{ env.AZURE_CONTAINER_REGISTRY }} --query passwords[0].value -o tsv)
+
+    - name: Restart Apps After Container Config
+      run: |
+        az webapp restart --name ${{ env.AZURE_WEBAPP_NAME_BFF }} --resource-group ${{ env.AZURE_RESOURCE_GROUP }}
+        az webapp restart --name ${{ env.AZURE_WEBAPP_NAME_FRONTEND }} --resource-group ${{ env.AZURE_RESOURCE_GROUP }}
 
     - name: Configure BFF Service Environment Variables
       run: |
