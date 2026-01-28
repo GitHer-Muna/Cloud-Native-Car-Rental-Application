@@ -174,10 +174,7 @@ jobs:
 
     - name: Test Azure Functions
       run: |
-        cd azure-functions/RentProcess
-        npm install
-        npm test
-        cd ../PaymentProcess
+        cd azure-functions
         npm install
         npm test
 
@@ -243,14 +240,9 @@ jobs:
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-    - name: Deploy RentProcess Function
+    - name: Deploy Azure Functions
       run: |
-        cd azure-functions/RentProcess
-        func azure functionapp publish ${{ env.AZURE_FUNCTIONAPP_NAME }} --build remote
-
-    - name: Deploy PaymentProcess Function
-      run: |
-        cd azure-functions/PaymentProcess
+        cd azure-functions
         func azure functionapp publish ${{ env.AZURE_FUNCTIONAPP_NAME }} --build remote
 
   # Deploy to Azure App Services
