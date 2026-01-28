@@ -240,6 +240,23 @@ jobs:
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
 
+    - name: Configure Functions App Settings
+      run: |
+        az functionapp config appsettings set \
+          --name ${{ env.AZURE_FUNCTIONAPP_NAME }} \
+          --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+          --settings FUNCTIONS_WORKER_RUNTIME=node SCM_DO_BUILD_DURING_DEPLOYMENT=true
+
+        # Wait for SCM to report updated settings (max 30 tries)
+        for i in {1..30}; do
+          if az functionapp config appsettings list --name ${{ env.AZURE_FUNCTIONAPP_NAME }} --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --query "[?name=='SCM_DO_BUILD_DURING_DEPLOYMENT']" -o tsv | grep -q SCM_DO_BUILD_DURING_DEPLOYMENT; then
+            echo "SCM settings ready"
+            break
+          fi
+          echo "Waiting for SCM settings... ($i/30)"
+          sleep 5
+        done
+
     - name: Deploy Azure Functions
       run: |
         cd azure-functions
