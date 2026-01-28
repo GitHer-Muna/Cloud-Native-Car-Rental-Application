@@ -309,6 +309,15 @@ jobs:
           --settings AZURE_STORAGE_CONNECTION_STRING="${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}" \
                      COSMOS_DB_CONNECTION_STRING="${{ secrets.COSMOS_DB_CONNECTION_STRING }}"
 
+        # Configure CORS for BFF service to allow frontend domain
+        az webapp cors add \
+          --name ${{ env.AZURE_WEBAPP_NAME_BFF }} \
+          --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+          --allowed-origins https://carrental-frontend.azurewebsites.net
+
+        # Restart BFF service to apply CORS settings
+        az webapp restart --name ${{ env.AZURE_WEBAPP_NAME_BFF }} --resource-group ${{ env.AZURE_RESOURCE_GROUP }}
+
     - name: Ensure correct container ports
       run: |
         echo "Setting WEBSITES_PORT for BFF to 3000"
